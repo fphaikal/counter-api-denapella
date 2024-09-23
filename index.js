@@ -65,7 +65,7 @@ app.get("/api/sensor", (req, res) => {
 // Endpoint untuk menerima data dari ESP32
 app.post("/api/data", (req, res) => {
   const id = req.query.sensorId;
-  const value = req.query.value;
+  const value = parseInt(req.query.value);
 
   if (isNaN(value)) {
     return res.status(400).json({ error: "Invalid data" });
