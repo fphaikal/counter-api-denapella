@@ -6,6 +6,24 @@ const cors = require("cors");
 const app = express();
 const port = 4000;
 
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
+const client = new Client({
+  authStrategy: new LocalAuth({
+      dataPath: 'api'
+  })
+});
+
+client.on('ready', () => {
+  console.log('Client is ready!');
+});
+
+client.on('qr', qr => {
+  qrcode.generate(qr, {small: true});
+});
+
+client.initialize();
+
 // Secret key for JWT
 const jwtSecret = "1601200716122006"; // Gantilah dengan kunci rahasia yang lebih aman
 
@@ -53,12 +71,17 @@ app.get("/api/sensor", (req, res) => {
     return res.status(400).json({ error: "Invalid sensor ID" });
   }
 
-  const sql = `SELECT * FROM sensor_${id}`;
+  if(!id){
+    return res.status(200).json({ error: "Please Fill Sensor Id"})
+  }
+
+  const sql = `SELECT * FROM sensor_${id} ORDER BY timestamp DESC`;
   db.query(sql, (err, results) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
-    res.status(200).json({ code: 200, results });
+    res.status(200).json({ code: res.statusCode,results });
+
   });
 });
 
@@ -76,7 +99,7 @@ app.post("/api/data", (req, res) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
-
+    
     // Update lastValue di tabel data
     const updateLastValueSql = `
       UPDATE data
@@ -88,9 +111,27 @@ app.post("/api/data", (req, res) => {
     db.query(updateLastValueSql, (updateErr) => {
       if (updateErr) {
         console.error("Failed to update lastValue:", updateErr.message);
+        client.sendMessage('6285765909380@c.us', updateErr.message)
+      }
+    });
+    const updateLastTimestampSql = `
+      UPDATE data
+      SET lastUpdate = (
+        SELECT timestamp FROM sensor_${id} ORDER BY timestamp DESC LIMIT 1
+      )
+      WHERE sensorId = ${id};
+    `;
+    db.query(updateLastTimestampSql, (updateErr) => {
+      if (updateErr) {
+        console.error("Failed to update lastUpdate:", updateErr.message);
+        client.sendMessage('6285765909380@c.us', updateErr.message)
       }
     });
 
+    if(res.statusCode) {
+      console.log(res.statusCode)
+      client.sendMessage('6285765909380@c.us', `Data sensor ${id} berhasil dimasukkan`)
+    }
     res.status(200).json({
       code: 200,
       message: "Data inserted successfully",
